@@ -32,11 +32,21 @@ class Game {
         this.floorBuffers = this.renderer.createMeshBuffers(this.floor);
 
         // Objeto animado por transformações geométricas (Requisito III)
-        // Cubo flutuante e giratório no centro do cenário
-        this.centerCube = new Cube(1.5, 1.5, 1.5, [0, 1.5, 0], [0.85, 0.25, 0.2, 1.0]);
+        // Passamos a função de animação específica para este cubo (Padrão Strategy)
+        this.centerCube = new Cube(
+            1.5, 1.5, 1.5,
+            [0, 1.5, 0],
+            [0.85, 0.25, 0.2, 1.0],
+            (cube, deltaTime) => {
+                cube.rotationY += 1.2 * deltaTime;
+                const nowSec = performance.now() / 1000.0;
+                cube.position[1] = 1.5 + Math.sin(nowSec * 2.0) * 0.3;
+                rotate(cube.modelMatrix, cube.position, cube.rotationY);
+            }
+        );
         this.cubeBuffers = this.renderer.createMeshBuffers(this.centerCube);
 
-        // Pilares / referências adicionais de profundidade
+        // Pilares / referências adicionais de profundidade (sem animação, estáticos)
         this.pillars = [
             new Cube(1, 3, 1, [-8, 1.5, -8], [0.3, 0.5, 0.8, 1.0]),
             new Cube(1, 3, 1, [ 8, 1.5, -8], [0.3, 0.8, 0.4, 1.0]),
@@ -88,12 +98,8 @@ class Game {
         // Atualiza movimentação da câmera e jogador
         this.camera.update(deltaTime);
 
-        // Animação geométrica do cubo central (Requisito III)
-        this.centerCube.rotationY += 1.2 * deltaTime;
-        // Leve flutuação senoidal no eixo Y
-        const nowSec = performance.now() / 1000.0;
-        this.centerCube.position[1] = 1.5 + Math.sin(nowSec * 2.0) * 0.3;
-        this.centerCube.updateModelMatrix();
+        // Executa a animação do cubo central (passando deltaTime para a animação)
+        this.centerCube.animate(deltaTime);
     }
 
     render() {

@@ -2,8 +2,38 @@
  * Classes genéricas para geometria do mundo
  * */
 
-class Floor {
+class GeometryObject {
+    constructor(animateFunc = null) {
+        if (new.target === GeometryObject) {
+            throw new Error("Cannot instantiate abstract class GeometryObject directly.");
+        }
+
+        this.animateFunc = animateFunc;
+    }
+
+    _buildGeometry() {
+        throw new Error("Abstract method '_buildGeometry()' must be implemented by subclass.");
+    }
+
+    changeAnimation(newAnimation) {
+        this.animateFunc = newAnimation;
+    }
+
+    animate(arg1, ...rest) {
+        // Suporta ambas as abordagens:
+        // 1) obj.animate(deltaTime) -> delega para this.animateFunc(this, deltaTime)
+        // 2) obj.animate((obj, dt) => { ... }, deltaTime) -> executa a função inline passando o objeto como 1º argumento
+        if (typeof arg1 === 'function') {
+            arg1(this, ...rest);
+        } else if (typeof this.animateFunc === 'function') {
+            this.animateFunc(this, arg1, ...rest);
+        }
+    }
+}
+
+class Floor extends GeometryObject {
     constructor(size = 50, repeatUV = 25) {
+        super();
         this.size = size;
         this.half = size / 2;
         this.repeatUV = repeatUV;
@@ -20,11 +50,11 @@ class Floor {
         // Posições (X, Y, Z), Normais (NX, NY, NZ), UV (U, V)
         this.positions = new Float32Array([
             -h, 0, -h,
-            h, 0, -h,
-            h, 0,  h,
+             h, 0, -h,
+             h, 0,  h,
 
             -h, 0, -h,
-            h, 0,  h,
+             h, 0,  h,
             -h, 0,  h
         ]);
 
@@ -52,18 +82,42 @@ class Floor {
     }
 }
 
-class Cube {
-    constructor(width = 1, height = 1, depth = 1, position = [0, 0, 0], color = [0.8, 0.2, 0.2, 1.0]) {
+
+class Rectangle2D extends GeometryObject {
+    constructor(width, height, position, color, texture = undefined) {
+        super();
+        this.width = width;
+        this.height = height;
+        this.depth = 0;
+        this.position = position;
+        this.color = texture === undefined ? undefined : color;
+        this.texture = texture;
+        this.modelMatrix = Mat4.create();
+
+        this._buildGeometry();
+    }
+
+    _buildGeometry() {
+    }
+}
+
+
+class Cube extends GeometryObject {
+    constructor(width = 1, height = 1, depth = 1, position = [0, 0, 0],
+                color = [0.8, 0.2, 0.2, 1.0], animateFunc = null) {
+        super(animateFunc);
         this.width = width;
         this.height = height;
         this.depth = depth;
         this.position = Vec3.create(...position);
         this.rotationY = 0;
+        this.rotationX = 0;
+        this.rotationZ = 0;
         this.color = color;
         this.modelMatrix = Mat4.create();
 
         this._buildGeometry();
-        this.updateModelMatrix();
+        rotate(this.modelMatrix, this.position, this.rotationY, this.rotationX, this.rotationZ);
     }
 
     _buildGeometry() {
@@ -77,8 +131,8 @@ class Cube {
             -w, -h,  d,   w, -h,  d,   w,  h,  d,
             -w, -h,  d,   w,  h,  d,  -w,  h,  d,
             // Trás (-Z)
-            w, -h, -d,  -w, -h, -d,  -w,  h, -d,
-            w, -h, -d,  -w,  h, -d,   w,  h, -d,
+             w, -h, -d,  -w, -h, -d,  -w,  h, -d,
+             w, -h, -d,  -w,  h, -d,   w,  h, -d,
             // Cima (+Y)
             -w,  h,  d,   w,  h,  d,   w,  h, -d,
             -w,  h,  d,   w,  h, -d,  -w,  h, -d,
@@ -86,8 +140,8 @@ class Cube {
             -w, -h, -d,   w, -h, -d,   w, -h,  d,
             -w, -h, -d,   w, -h,  d,  -w, -h,  d,
             // Direita (+X)
-            w, -h,  d,   w, -h, -d,   w,  h, -d,
-            w, -h,  d,   w,  h, -d,   w,  h,  d,
+             w, -h,  d,   w, -h, -d,   w,  h, -d,
+             w, -h,  d,   w,  h, -d,   w,  h,  d,
             // Esquerda (-X)
             -w, -h, -d,  -w, -h,  d,  -w,  h,  d,
             -w, -h, -d,  -w,  h,  d,  -w,  h, -d
@@ -95,20 +149,20 @@ class Cube {
 
         this.normals = new Float32Array([
             // Frente
-            0,  0,  1,   0,  0,  1,   0,  0,  1,
-            0,  0,  1,   0,  0,  1,   0,  0,  1,
+             0,  0,  1,   0,  0,  1,   0,  0,  1,
+             0,  0,  1,   0,  0,  1,   0,  0,  1,
             // Trás
-            0,  0, -1,   0,  0, -1,   0,  0, -1,
-            0,  0, -1,   0,  0, -1,   0,  0, -1,
+             0,  0, -1,   0,  0, -1,   0,  0, -1,
+             0,  0, -1,   0,  0, -1,   0,  0, -1,
             // Cima
-            0,  1,  0,   0,  1,  0,   0,  1,  0,
-            0,  1,  0,   0,  1,  0,   0,  1,  0,
+             0,  1,  0,   0,  1,  0,   0,  1,  0,
+             0,  1,  0,   0,  1,  0,   0,  1,  0,
             // Baixo
-            0, -1,  0,   0, -1,  0,   0, -1,  0,
-            0, -1,  0,   0, -1,  0,   0, -1,  0,
+             0, -1,  0,   0, -1,  0,   0, -1,  0,
+             0, -1,  0,   0, -1,  0,   0, -1,  0,
             // Direita
-            1,  0,  0,   1,  0,  0,   1,  0,  0,
-            1,  0,  0,   1,  0,  0,   1,  0,  0,
+             1,  0,  0,   1,  0,  0,   1,  0,  0,
+             1,  0,  0,   1,  0,  0,   1,  0,  0,
             // Esquerda
             -1,  0,  0,  -1,  0,  0,  -1,  0,  0,
             -1,  0,  0,  -1,  0,  0,  -1,  0,  0
@@ -124,13 +178,5 @@ class Cube {
         }
         this.texCoords = new Float32Array(texCoords);
         this.vertexCount = 36;
-    }
-
-    updateModelMatrix() {
-        Mat4.identity(this.modelMatrix);
-        Mat4.translate(this.modelMatrix, this.modelMatrix, this.position);
-        if (this.rotationY !== 0) {
-            Mat4.rotateY(this.modelMatrix, this.modelMatrix, this.rotationY);
-        }
     }
 }

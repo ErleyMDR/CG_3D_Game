@@ -134,7 +134,10 @@ class FPSCamera {
             velocity[0] /= len;
             velocity[2] /= len;
 
-            const dist = this.moveSpeed * deltaTime;
+            const speed = this.keys['shift']
+                ? this.moveSpeed * 1.5
+                : this.moveSpeed;
+            const dist = speed * deltaTime;
             this.position[0] += velocity[0] * dist;
             this.position[2] += velocity[2] * dist;
         }
