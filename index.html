@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Horror Maze - Slender / Weeping Angel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050508;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #eee;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* Retículo / Crosshair no centro */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Overlay de Instruções */
+        #hud {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            background: rgba(10, 10, 15, 0.75);
+            padding: 14px 18px;
+            border-radius: 8px;
+            border-left: 3px solid #e53935;
+            font-size: 14px;
+            line-height: 1.6;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        #hud h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ff5252;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        #hud .key {
+            display: inline-block;
+            background: #222;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 1px 6px;
+            font-size: 12px;
+            color: #ffeb3b;
+            font-family: monospace;
+        }
+
+        #click-prompt {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            animation: pulse 2s infinite ease-in-out;
+            transition: opacity 0.3s;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1.0; }
+        }
+    </style>
+
+    <!-- Bibliotecas de Álgebra Linear e Módulos do Jogo -->
+    <script src="src/util/math.js"></script>
+    <script src="src/util/math-utils.js"></script>
+    <script src="src/graphics/camera.js"></script>
+    <script src="src/game/entities.js"></script>
+    <script src="src/graphics/renderer.js"></script>
+    <script src="src/util/objreader.js"></script>
+    <script src="src/game/game.js"></script>
+</head>
+
+<body onload="init()">
+    <div id="canvas-container">
+        <canvas id="glcanvas1"></canvas>
+        <div id="crosshair"></div>
+
+        <div id="hud">
+            <h1>JOGO DE TERROR</h1>
+            <div>Controles: <span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span> para andar</div>
+            <div>Visão: <span class="key">Mouse</span> (Clique na tela para travar o cursor)</div>
+            <div>Lanterna: <span class="key">F</span> (<span id="hud-flashlight" style="color: #4caf50; font-weight: bold;">LIGADA</span>)</div>
+        </div>
+
+        <div id="click-prompt">Clique na tela para travar a câmera e explorar</div>
+    </div>
+
+    <script>
+        // Ocultar prompt de clique quando o mouse estiver travado
+        document.addEventListener('pointerlockchange', () => {
+            const prompt = document.getElementById('click-prompt');
+            if (prompt) {
+                prompt.style.opacity = (document.pointerLockElement === document.getElementById('glcanvas1')) ? '0' : '1';
+            }
+        });
+    </script>
+</body>
+</html>
