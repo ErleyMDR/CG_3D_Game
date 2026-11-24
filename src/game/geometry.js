@@ -46,16 +46,14 @@ class Floor extends GeometryObject {
         const h = this.half;
         const uv = this.repeatUV;
 
-        // Plano XZ com Y = 0 (2 triângulos, 6 vértices)
-        // Posições (X, Y, Z), Normais (NX, NY, NZ), UV (U, V)
         this.positions = new Float32Array([
             -h, 0, -h,
-             h, 0, -h,
-             h, 0,  h,
+            h, 0,  h,
+            h, 0, -h,
 
             -h, 0, -h,
-             h, 0,  h,
-            -h, 0,  h
+            -h, 0,  h,
+            h, 0,  h
         ]);
 
         this.normals = new Float32Array([
@@ -70,12 +68,12 @@ class Floor extends GeometryObject {
 
         this.texCoords = new Float32Array([
             0,  0,
-            uv, 0,
             uv, uv,
+            uv, 0,
 
             0,  0,
-            uv, uv,
-            0,  uv
+            0,  uv,
+            uv, uv
         ]);
 
         this.vertexCount = 6;
@@ -84,20 +82,80 @@ class Floor extends GeometryObject {
 
 
 class Rectangle2D extends GeometryObject {
-    constructor(width, height, position, color, texture = undefined) {
-        super();
+    constructor(
+        width,
+        height,
+        position,
+        color = undefined,
+        texture = undefined,
+        animateFunc = null
+    ) {
+        super(animateFunc);
+
         this.width = width;
         this.height = height;
         this.depth = 0;
-        this.position = position;
-        this.color = texture === undefined ? undefined : color;
+
+        this.position = Vec3.create(...position);
+        this.rotationZ = 0;
+
+        this.color = color ?? [1, 1, 1, 1];
         this.texture = texture;
+
+        // Material padrão do verso
+        this.backColor = [0.2, 0.2, 0.2, 1.0];
+
         this.modelMatrix = Mat4.create();
 
         this._buildGeometry();
+        // rotate(this.modelMatrix, this.position, 0, 0, 0);
     }
 
     _buildGeometry() {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+
+        this.positions = new Float32Array([
+            // Frente (+Z)
+            -hw, -hh, 0,
+            hw, -hh, 0,
+            hw,  hh, 0,
+
+            -hw, -hh, 0,
+            hw,  hh, 0,
+            -hw,  hh, 0,
+
+            // Verso (-Z): ordem dos vértices invertida
+            hw, -hh, 0,
+            -hw, -hh, 0,
+            -hw,  hh, 0,
+
+            hw, -hh, 0,
+            -hw,  hh, 0,
+            hw,  hh, 0
+        ]);
+
+        this.normals = new Float32Array([
+            // Frente
+            0, 0, 1,  0, 0, 1,  0, 0, 1,
+            0, 0, 1,  0, 0, 1,  0, 0, 1,
+
+            // Verso
+            0, 0, -1,  0, 0, -1,  0, 0, -1,
+            0, 0, -1,  0, 0, -1,  0, 0, -1
+        ]);
+
+        this.texCoords = new Float32Array([
+            // Frente
+            0, 0,  1, 0,  1, 1,
+            0, 0,  1, 1,  0, 1,
+
+            // Verso
+            1, 0,  0, 0,  0, 1,
+            1, 0,  0, 1,  1, 1
+        ]);
+
+        this.vertexCount = 12;
     }
 }
 
@@ -178,5 +236,27 @@ class Cube extends GeometryObject {
         }
         this.texCoords = new Float32Array(texCoords);
         this.vertexCount = 36;
+    }
+}
+
+class ModelObject extends GeometryObject{
+    constructor(object, position, color, animateFunc) {
+        super();
+        if (object === undefined || object === null) {
+            throw Error(`Object coords are undefined: ${object}`);
+        }
+        this.position = position;
+        this.color = color;
+        this.animateFunc = animateFunc;
+
+        this._buildGeometry(object);
+    }
+
+    _buildGeometry(object) {
+        this.positions = object.positions;
+        this.normals = object.normals;
+        this.texCoords = object.texCoords;
+        this.indices = object.indices;
+        this.vertexCount = this.positions.length;
     }
 }

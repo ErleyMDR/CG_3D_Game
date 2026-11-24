@@ -2,23 +2,21 @@
  * Game - Lógica Principal, Loop de Jogo e Gerenciamento de Cena
  */
 
+let gameTextures = {
+    floor: "src/assets/textures/Bricks073C_1K-JPG_Color.jpg",
+    walls: "src/assets/textures/Bricks073C_1K-JPG_Color.jpg",
+    pages: "src/assets/textures/img.png"
+};
+
 class Game {
-    constructor() {
-        this.canvas = document.getElementById("glcanvas1");
-        if (!this.canvas) {
-            console.error("Canvas glcanvas1 não encontrado.");
-            return;
-        }
+    constructor(canvas, textures) {
+        this.canvas = canvas;
 
-        // Ajustar resolução interna do canvas para alta nitidez
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
-
-        this.renderer = new WebGLRenderer(this.canvas);
+        this.renderer = new WebGLRenderer(this.canvas, textures);
         this.camera = new FPSCamera(this.canvas, {
             x: 0,
             y: 1.7,
-            z: 5,
+            z: 8,
             moveSpeed: 6.0
         });
 
@@ -28,14 +26,14 @@ class Game {
         this.projectionMatrix = Mat4.create();
 
         // Entidades do mundo
-        this.floor = new Floor(60, 30);
+        this.floor = new Floor(60, 50);
         this.floorBuffers = this.renderer.createMeshBuffers(this.floor);
 
         // Objeto animado por transformações geométricas (Requisito III)
         // Passamos a função de animação específica para este cubo (Padrão Strategy)
         this.centerCube = new Cube(
             1.5, 1.5, 1.5,
-            [0, 1.5, 0],
+            [-3, 1.5, -5],
             [0.85, 0.25, 0.2, 1.0],
             (cube, deltaTime) => {
                 cube.rotationY += 1.2 * deltaTime;
@@ -45,6 +43,21 @@ class Game {
             }
         );
         this.cubeBuffers = this.renderer.createMeshBuffers(this.centerCube);
+
+        // Retângulo Bidimensional animado por transformações geométricas
+        // Função de animação igual à do cubo
+        this.centerRect = new Rectangle2D(
+            1.25, 1.0,
+            [3, 1.125, -5],
+            null, null,
+            (rect, deltaTime) => {
+                rect.rotationY += 1.2 * deltaTime;
+                const nowSec = performance.now() / 1000.0;
+                rect.position[1] = 1.5 + Math.sin(nowSec * 2.0) * 0.3;
+                rotate(rect.modelMatrix, rect.position, rect.rotationY);
+            }
+        );
+        this.rectBuffers = this.renderer.createMeshBuffers(this.centerRect);
 
         // Pilares / referências adicionais de profundidade (sem animação, estáticos)
         this.pillars = [
@@ -57,6 +70,49 @@ class Game {
 
         this.lastTime = 0;
         this._setupEvents();
+    }
+
+    static async create() {
+        const canvas = document.getElementById("glcanvas1");
+        if (!canvas) {
+            console.error("Canvas glcanvas1 não encontrado.");
+            return;
+        }
+
+        // Ajustar resolução interna do canvas para alta nitidez
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const textures = await this._loadTextures();
+
+        return new Game(canvas, textures);
+    }
+
+    static async _loadTextures() {
+        const entries = Object.entries(gameTextures);
+
+        const loadedTextures = await Promise.all(
+            entries.map(async ([name, src]) => {
+                const image = await this._loadImage(src);
+                console.info(`Par carregado: ${[name, image]}`)
+                return [name, image];
+            })
+        );
+
+        return Object.fromEntries(loadedTextures);
+    }
+
+    static _loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(
+                new Error(`Falha ao carregar imagem: ${src}`)
+            );
+
+            image.src = src;
+        });
     }
 
     _setupEvents() {
@@ -100,6 +156,7 @@ class Game {
 
         // Executa a animação do cubo central (passando deltaTime para a animação)
         this.centerCube.animate(deltaTime);
+        this.centerRect.animate(deltaTime);
     }
 
     render() {
@@ -119,10 +176,24 @@ class Game {
             color: this.centerCube.color
         });
 
+        // Frente: textura
+        this.renderer.drawMesh(this.rectBuffers, this.centerRect.modelMatrix, {
+                texture: this.renderer.textures.pages,
+                first: 0,
+                count: 6
+        });
+
+        // Verso: cor sólida
+        this.renderer.drawMesh(this.rectBuffers, this.centerRect.modelMatrix, {
+                color: this.centerRect.backColor,
+                first: 6,
+                count: 6
+        });
+
         // 3. Desenha os pilares de referência com cor sólida
         for (let i = 0; i < this.pillars.length; i++) {
             this.renderer.drawMesh(this.pillarBuffers[i], this.pillars[i].modelMatrix, {
-                color: this.pillars[i].color
+                texture: this.renderer.textures.walls
             });
         }
     }

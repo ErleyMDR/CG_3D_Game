@@ -5,11 +5,11 @@
  * suporte a texturas e renderização de malhas.
  */
 
-const skyboxColor = [0.05, 0.05, 0.10, 1.0];
+const skyboxColor = [0.05, 0.05, 0.07, 1.0];
 
 
 class WebGLRenderer {
-    constructor(canvas) {
+    constructor(canvas, textures) {
         this.canvas = canvas;
         this.gl = this._initGL(canvas);
         if (!this.gl) {
@@ -22,15 +22,18 @@ class WebGLRenderer {
 
         this._setupGL();
         this._initShaders();
-        this._initTextures();
+        this._initTextures(textures);
     }
 
     _initGL(canvas) {
-        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+        const gl = canvas.getContext("webgl2") || canvas.getContext("experimental-webgl");
         if (!gl) {
             alert("Contexto WebGL inexistente! Use um navegador compatível.");
             return null;
         }
+
+        console.log("WebGL version:", gl.getParameter(gl.VERSION));
+        console.log("GLSL version:", gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
 
         // Habilita extensões úteis se disponíveis
         gl.getExtension('OES_element_index_uint');
@@ -62,190 +65,241 @@ class WebGLRenderer {
         return shader;
     }
 
+
     _initShaders() {
         const gl = this.gl;
 
-        const vsSource = `
-            attribute vec3 aPosition;
-            attribute vec3 aNormal;
-            attribute vec2 aTexCoord;
+        const vsSource = `#version 300 es
+        in vec3 aPosition;
+        in vec3 aNormal;
+        in vec2 aTexCoord;
+    
+        uniform mat4 uModel;
+        uniform mat4 uView;
+        uniform mat4 uProjection;
+    
+        out vec3 vWorldPos;
+        out vec3 vWorldNormal;
+        out vec2 vTexCoord;
+    
+        void main() {
+            vec4 worldPos = uModel * vec4(aPosition, 1.0);
+    
+            vWorldPos = worldPos.xyz;
+            vWorldNormal = normalize((uModel * vec4(aNormal, 0.0)).xyz);
+            vTexCoord = aTexCoord;
+    
+            gl_Position = uProjection * uView * worldPos;
+        }`;
 
-            uniform mat4 uModel;
-            uniform mat4 uView;
-            uniform mat4 uProjection;
-
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-            varying vec2 vTexCoord;
-
-            void main() {
-                vec4 worldPos = uModel * vec4(aPosition, 1.0);
-                vWorldPos = worldPos.xyz;
-                
-                // Transformação da normal para o espaço do mundo
-                vWorldNormal = normalize((uModel * vec4(aNormal, 0.0)).xyz);
-                vTexCoord = aTexCoord;
-
-                gl_Position = uProjection * uView * worldPos;
+        const fsSource = `#version 300 es
+        precision mediump float;
+    
+        in vec3 vWorldPos;
+        in vec3 vWorldNormal;
+        in vec2 vTexCoord;
+    
+        uniform vec3 uCamPos;
+        uniform vec3 uLightPos;
+        uniform vec3 uLightDir;
+        uniform vec3 uLightColor;
+        uniform float uLightEnabled;
+    
+        uniform vec3 uAmbientColor;
+    
+        uniform int uUseTexture;
+        uniform sampler2D uSampler;
+        uniform vec4 uColor;
+    
+        out vec4 fragColor;
+    
+        void main() {
+            vec3 N = normalize(vWorldNormal);
+    
+            vec4 baseColor;
+    
+            if (uUseTexture == 1) {
+                baseColor = texture(uSampler, vTexCoord);
+            } else {
+                baseColor = uColor;
             }
-        `;
-
-        const fsSource = `
-            precision mediump float;
-
-            varying vec3 vWorldPos;
-            varying vec3 vWorldNormal;
-            varying vec2 vTexCoord;
-
-            // Câmera e Luz (Lanterna / Luz Móvel)
-            uniform vec3 uCamPos;
-            uniform vec3 uLightPos;
-            uniform vec3 uLightDir;
-            uniform vec3 uLightColor;
-            uniform float uLightEnabled;
-
-            uniform vec3 uAmbientColor;
-
-            // Material
-            uniform int uUseTexture;
-            uniform sampler2D uSampler;
-            uniform vec4 uColor;
-
-            void main() {
-                vec3 N = normalize(vWorldNormal);
-                
-                // Cor do material (textura ou cor sólida)
-                vec4 baseColor = (uUseTexture == 1) ? texture2D(uSampler, vTexCoord) : uColor;
-                
-                // 1. Componente Ambiente
-                vec3 ambient = uAmbientColor * baseColor.rgb;
-                
-                // Se a lanterna estiver desligada, apenas iluminação ambiente
-                if (uLightEnabled <= 0.0) {
-                    gl_FragColor = vec4(ambient, baseColor.a);
-                    return;
-                }
-                
-                // 2. Modelo de Phong da Luz Móvel (Lanterna com atenuação e foco)
-                vec3 lightVec = uLightPos - vWorldPos;
-                float dist = length(lightVec);
-                vec3 L = normalize(lightVec);
-                vec3 V = normalize(uCamPos - vWorldPos);
-                
-                // Atenuação quadrática suave com a distância
-                // float attenuation = 1.0 / (1.0 + 0.05 * dist + 0.01 * (dist * dist));
-                float attenuation = 1.0 / (1.0 + 0.01 * dist);
-                
-                // Efeito de cone de lanterna (Spotlight)
-                float spotEffect = dot(-L, normalize(uLightDir));
-                float spotFactor = smoothstep(0.78, 0.92, spotEffect);
-                
-                // Componente Difusa de Lambert
-                float diff = max(dot(N, L), 0.0);
-                vec3 diffuse = diff * uLightColor * baseColor.rgb;
-                
-                // Componente Especular de Blinn-Phong
-                vec3 H = normalize(L + V);
-                float spec = pow(max(dot(N, H), 0.0), 32.0);
-                vec3 specular = spec * uLightColor * 0.4;
-                
-                vec3 finalColor = ambient + (diffuse + specular) * attenuation * spotFactor;
-                gl_FragColor = vec4(finalColor, baseColor.a);
+    
+            vec3 ambient = uAmbientColor * baseColor.rgb;
+    
+            if (uLightEnabled <= 0.0) {
+                fragColor = vec4(ambient, baseColor.a);
+                return;
             }
-        `;
+    
+            vec3 lightVec = uLightPos - vWorldPos;
+            float dist = length(lightVec);
+    
+            vec3 L = normalize(lightVec);
+            vec3 V = normalize(uCamPos - vWorldPos);
+    
+            float attenuation = 1.0 / (1.0 + 0.01 * dist);
+    
+            float spotEffect = dot(-L, normalize(uLightDir));
+            float spotFactor = smoothstep(0.78, 0.92, spotEffect);
+    
+            float diff = max(dot(N, L), 0.0);
+            vec3 diffuse = diff * uLightColor * baseColor.rgb;
+    
+            vec3 H = normalize(L + V);
+            float spec = pow(max(dot(N, H), 0.0), 32.0);
+            vec3 specular = spec * uLightColor * 0.4;
+    
+            vec3 finalColor =
+                ambient + (diffuse + specular) * attenuation * spotFactor;
+    
+            fragColor = vec4(finalColor, baseColor.a);
+        }`;
 
-        const vtxShader = this._createShader(gl.VERTEX_SHADER, vsSource);
-        const fragShader = this._createShader(gl.FRAGMENT_SHADER, fsSource);
+        // Compilação
+        const vertexShader = this._createShader(gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = this._createShader(gl.FRAGMENT_SHADER, fsSource);
 
-        const prog = gl.createProgram();
-        gl.attachShader(prog, vtxShader);
-        gl.attachShader(prog, fragShader);
-        gl.linkProgram(prog);
+        // Criação e linkagem do programa
+        const program = gl.createProgram();
 
-        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-            throw new Error("Erro na linkagem do programa: " + gl.getProgramInfoLog(prog));
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            const info = gl.getProgramInfoLog(program);
+
+            gl.deleteProgram(program);
+            gl.deleteShader(vertexShader);
+            gl.deleteShader(fragmentShader);
+
+            throw new Error("Erro na linkagem do programa: " + info);
         }
 
-        this.program = prog;
-        gl.useProgram(prog);
+        // Programa ativo
+        this.program = program;
+        gl.useProgram(program);
 
-        // Mapear localizações de atributos e uniforms
-        this.locations = {
-            attribs: {
-                position: gl.getAttribLocation(prog, "aPosition"),
-                normal: gl.getAttribLocation(prog, "aNormal"),
-                texCoord: gl.getAttribLocation(prog, "aTexCoord")
-            },
-            uniforms: {
-                model: gl.getUniformLocation(prog, "uModel"),
-                view: gl.getUniformLocation(prog, "uView"),
-                projection: gl.getUniformLocation(prog, "uProjection"),
-
-                camPos: gl.getUniformLocation(prog, "uCamPos"),
-                lightPos: gl.getUniformLocation(prog, "uLightPos"),
-                lightDir: gl.getUniformLocation(prog, "uLightDir"),
-                lightColor: gl.getUniformLocation(prog, "uLightColor"),
-                lightEnabled: gl.getUniformLocation(prog, "uLightEnabled"),
-
-                ambientColor: gl.getUniformLocation(prog, "uAmbientColor"),
-
-                useTexture: gl.getUniformLocation(prog, "uUseTexture"),
-                sampler: gl.getUniformLocation(prog, "uSampler"),
-                color: gl.getUniformLocation(prog, "uColor")
-            }
+        // Localizações dos atributos
+        const attribs = {
+            position: gl.getAttribLocation(program, "aPosition"),
+            normal: gl.getAttribLocation(program, "aNormal"),
+            texCoord: gl.getAttribLocation(program, "aTexCoord")
         };
 
-        // Habilitar arrays de atributos
-        gl.enableVertexAttribArray(this.locations.attribs.position);
-        gl.enableVertexAttribArray(this.locations.attribs.normal);
-        gl.enableVertexAttribArray(this.locations.attribs.texCoord);
-    }
+        // Localizações dos uniforms
+        const uniforms = {
+            model: gl.getUniformLocation(program, "uModel"),
+            view: gl.getUniformLocation(program, "uView"),
+            projection: gl.getUniformLocation(program, "uProjection"),
 
-    _initTextures() {
-        // Criar textura de piso procedural (azulejo/grade de terror)
-        // Isso funciona nativamente sem problemas de CORS ou servidor local!
-        const canvas = document.createElement("canvas");
-        canvas.width = 256;
-        canvas.height = 256;
-        const ctx = canvas.getContext("2d");
+            camPos: gl.getUniformLocation(program, "uCamPos"),
+            lightPos: gl.getUniformLocation(program, "uLightPos"),
+            lightDir: gl.getUniformLocation(program, "uLightDir"),
+            lightColor: gl.getUniformLocation(program, "uLightColor"),
+            lightEnabled: gl.getUniformLocation(program, "uLightEnabled"),
 
-        // Fundo cinza escuro
-        ctx.fillStyle = "#1c1c22";
-        ctx.fillRect(0, 0, 256, 256);
+            ambientColor: gl.getUniformLocation(program, "uAmbientColor"),
 
-        // Grade de azulejos
-        ctx.strokeStyle = "#0d0d12";
-        ctx.lineWidth = 4;
-        ctx.strokeRect(2, 2, 252, 252);
-        ctx.strokeRect(64, 2, 0, 252);
-        ctx.strokeRect(128, 2, 0, 252);
-        ctx.strokeRect(192, 2, 0, 252);
-        ctx.strokeRect(2, 64, 252, 0);
-        ctx.strokeRect(2, 128, 252, 0);
-        ctx.strokeRect(2, 192, 252, 0);
+            useTexture: gl.getUniformLocation(program, "uUseTexture"),
+            sampler: gl.getUniformLocation(program, "uSampler"),
+            color: gl.getUniformLocation(program, "uColor")
+        };
 
-        // Textura leve de ruído/mancha
-        ctx.fillStyle = "rgba(40, 40, 50, 0.15)";
-        for (let i = 0; i < 400; i++) {
-            const rx = Math.random() * 256;
-            const ry = Math.random() * 256;
-            ctx.fillRect(rx, ry, 2, 2);
+        this.locations = { attribs, uniforms };
+
+        // Verificação dos atributos
+        for (const [name, location] of Object.entries(attribs)) {
+            if (location === -1) {
+                throw new Error(`Atributo não encontrado no shader: ${name}`);
+            }
+
+            gl.enableVertexAttribArray(location);
         }
 
-        this.textures.floor = this.createTextureFromSource(canvas);
+        // Verificação dos uniforms
+        for (const [name, location] of Object.entries(uniforms)) {
+            if (location === null) {
+                console.warn(`Uniform não encontrado ou inativo: ${name}`);
+            }
+        }
+
+        // Unidade de textura padrão
+        gl.uniform1i(uniforms.sampler, 0);
+
+        // Liberar shaders após a linkagem
+        gl.detachShader(program, vertexShader);
+        gl.detachShader(program, fragmentShader);
+
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+    }
+
+
+    _initTextures(images) {
+        for (const [name, image] of Object.entries(images)) {
+            console.log(`Carregando textura: ${name}`);
+            console.log("Imagem:", image);
+            console.log("Dimensões:", image.width, image.height);
+            console.log("Completa:", image.complete);
+
+            this.textures[name] = this.createTextureFromSource(image);
+
+            console.log("WebGLTexture:", this.textures[name]);
+        }
     }
 
     createTextureFromSource(source) {
         const gl = this.gl;
+
         const texture = gl.createTexture();
+
         gl.bindTexture(gl.TEXTURE_2D, texture);
 
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+        gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            source
+        );
+
+        gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_WRAP_S,
+            gl.REPEAT
+        );
+
+        gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_WRAP_T,
+            gl.REPEAT
+        );
+
+        gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_MIN_FILTER,
+            gl.LINEAR_MIPMAP_LINEAR
+        );
+
+        gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_MAG_FILTER,
+            gl.LINEAR
+        );
+
         gl.generateMipmap(gl.TEXTURE_2D);
+
+        const error = gl.getError();
+
+        if (error !== gl.NO_ERROR) {
+            console.error("Erro ao criar textura:", error);
+        }
+
+        gl.bindTexture(gl.TEXTURE_2D, null);
 
         return texture;
     }
@@ -331,9 +385,10 @@ class WebGLRenderer {
         gl.uniformMatrix4fv(this.locations.uniforms.model, false, modelMatrix);
 
         if (options.texture) {
-            gl.uniform1i(this.locations.uniforms.useTexture, 1);
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, options.texture);
+            gl.uniform1i(this.locations.uniforms.sampler, 0);
+            gl.uniform1i(this.locations.uniforms.useTexture, 1);
         } else {
             gl.uniform1i(this.locations.uniforms.useTexture, 0);
             const col = options.color || [1, 1, 1, 1];
@@ -350,6 +405,43 @@ class WebGLRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.tex);
         gl.vertexAttribPointer(this.locations.attribs.texCoord, 2, gl.FLOAT, false, 0, 0);
 
-        gl.drawArrays(gl.TRIANGLES, 0, buffers.count);
+        const first = options.first ?? 0;
+        const count = options.count ?? buffers.count;
+
+        gl.drawArrays(gl.TRIANGLES, first, count);
+    }
+
+    _proceduralTexture() {
+        // Criar textura de piso procedural (azulejo/grade de terror)
+        // Isso funciona nativamente sem problemas de CORS ou servidor local!
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+
+        // Fundo cinza escuro
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, 256, 256);
+
+        // Grade de azulejos
+        ctx.strokeStyle = "#0d0d12";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, 252, 252);
+        ctx.strokeRect(64, 2, 0, 252);
+        ctx.strokeRect(128, 2, 0, 252);
+        ctx.strokeRect(192, 2, 0, 252);
+        ctx.strokeRect(2, 64, 252, 0);
+        ctx.strokeRect(2, 128, 252, 0);
+        ctx.strokeRect(2, 192, 252, 0);
+
+        // Textura leve de ruído/mancha
+        ctx.fillStyle = "rgba(40, 40, 50, 0.15)";
+        for (let i = 0; i < 400; i++) {
+            const rx = Math.random() * 256;
+            const ry = Math.random() * 256;
+            ctx.fillRect(rx, ry, 2, 2);
+        }
+
+        return canvas;
     }
 }

@@ -15,6 +15,9 @@ class FPSCamera {
             options.z ?? 5
         );
 
+        this.mouseDeltaX = 0;
+        this.mouseDeltaY = 0;
+
         // Orientação em graus
         // yaw = -90° aponta inicialmente para o eixo -Z (para dentro do cenário)
         this.yaw = options.yaw ?? -90.0;
@@ -67,17 +70,8 @@ class FPSCamera {
         document.addEventListener('mousemove', (e) => {
             if (!this.isLocked) return;
 
-            const dx = e.movementX || 0;
-            const dy = e.movementY || 0;
-
-            this.yaw += dx * this.mouseSensitivity;
-            this.pitch -= dy * this.mouseSensitivity;
-
-            // Restringir pitch para evitar rotação completa (gimbal flip)
-            if (this.pitch > 89.0) this.pitch = 89.0;
-            if (this.pitch < -89.0) this.pitch = -89.0;
-
-            this._updateVectors();
+            this.mouseDeltaX += e.movementX || 0;
+            this.mouseDeltaY += e.movementY || 0;
         });
     }
 
@@ -104,6 +98,18 @@ class FPSCamera {
 
     update(deltaTime) {
         if (deltaTime <= 0) return;
+
+        // Atualizar orientação
+        this.yaw += this.mouseDeltaX * this.mouseSensitivity;
+        this.pitch -= this.mouseDeltaY * this.mouseSensitivity;
+
+        this.pitch = Math.max(-89, Math.min(89, this.pitch));
+
+        this.mouseDeltaX = 0;
+        this.mouseDeltaY = 0;
+
+        this._updateVectors();
+
 
         // Movimentação horizontal no plano XZ
         const yawRad = (this.yaw * Math.PI) / 180.0;
