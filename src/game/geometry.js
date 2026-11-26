@@ -9,6 +9,12 @@ class GeometryObject {
         }
 
         this.animateFunc = animateFunc;
+
+        this.position = Vec3.create(0, 0, 0);
+        this.rotationX = 0;
+        this.rotationY = 0;
+        this.rotationZ = 0;
+        this.modelMatrix = Mat4.create();
     }
 
     _buildGeometry() {
@@ -17,6 +23,14 @@ class GeometryObject {
 
     changeAnimation(newAnimation) {
         this.animateFunc = newAnimation;
+    }
+
+    updateModelMatrix() {
+        Mat4.identity(this.modelMatrix);
+        Mat4.translate(this.modelMatrix, this.modelMatrix, this.position);
+        if (this.rotationY) Mat4.rotateY(this.modelMatrix, this.modelMatrix, this.rotationY);
+        if (this.rotationX) Mat4.rotateX(this.modelMatrix, this.modelMatrix, this.rotationX);
+        if (this.rotationZ) Mat4.rotateZ(this.modelMatrix, this.modelMatrix, this.rotationZ);
     }
 
     animate(arg1, ...rest) {
@@ -37,23 +51,25 @@ class Floor extends GeometryObject {
         this.size = size;
         this.half = size / 2;
         this.repeatUV = repeatUV;
-        this.modelMatrix = Mat4.create();
 
         this._buildGeometry();
+        this.updateModelMatrix();
     }
 
     _buildGeometry() {
         const h = this.half;
         const uv = this.repeatUV;
 
+        // Plano XZ com Y = 0 (2 triângulos, 6 vértices em ordem anti-horária CCW vistos de cima)
+        // Posições (X, Y, Z), Normais (NX, NY, NZ), UV (U, V)
         this.positions = new Float32Array([
             -h, 0, -h,
-            h, 0,  h,
-            h, 0, -h,
+             h, 0,  h,
+             h, 0, -h,
 
             -h, 0, -h,
             -h, 0,  h,
-            h, 0,  h
+             h, 0,  h
         ]);
 
         this.normals = new Float32Array([
@@ -85,7 +101,7 @@ class Rectangle2D extends GeometryObject {
     constructor(
         width,
         height,
-        position,
+        position = [0, 0, 0],
         color = undefined,
         texture = undefined,
         animateFunc = null
@@ -96,7 +112,9 @@ class Rectangle2D extends GeometryObject {
         this.height = height;
         this.depth = 0;
 
-        this.position = Vec3.create(...position);
+        Vec3.set(this.position, ...position);
+        this.rotationX = 0;
+        this.rotationY = 0;
         this.rotationZ = 0;
 
         this.color = color ?? [1, 1, 1, 1];
@@ -105,10 +123,8 @@ class Rectangle2D extends GeometryObject {
         // Material padrão do verso
         this.backColor = [0.2, 0.2, 0.2, 1.0];
 
-        this.modelMatrix = Mat4.create();
-
         this._buildGeometry();
-        // rotate(this.modelMatrix, this.position, 0, 0, 0);
+        this.updateModelMatrix();
     }
 
     _buildGeometry() {
@@ -118,21 +134,21 @@ class Rectangle2D extends GeometryObject {
         this.positions = new Float32Array([
             // Frente (+Z)
             -hw, -hh, 0,
-            hw, -hh, 0,
-            hw,  hh, 0,
+             hw, -hh, 0,
+             hw,  hh, 0,
 
             -hw, -hh, 0,
-            hw,  hh, 0,
+             hw,  hh, 0,
             -hw,  hh, 0,
 
             // Verso (-Z): ordem dos vértices invertida
-            hw, -hh, 0,
+             hw, -hh, 0,
             -hw, -hh, 0,
             -hw,  hh, 0,
 
-            hw, -hh, 0,
+             hw, -hh, 0,
             -hw,  hh, 0,
-            hw,  hh, 0
+             hw,  hh, 0
         ]);
 
         this.normals = new Float32Array([
@@ -161,21 +177,27 @@ class Rectangle2D extends GeometryObject {
 
 
 class Cube extends GeometryObject {
-    constructor(width = 1, height = 1, depth = 1, position = [0, 0, 0],
-                color = [0.8, 0.2, 0.2, 1.0], animateFunc = null) {
+    constructor(
+        width = 1,
+        height = 1,
+        depth = 1,
+        position = [0, 0, 0],
+        color = [0.8, 0.2, 0.2, 1.0],
+        animateFunc = null
+    ) {
         super(animateFunc);
         this.width = width;
         this.height = height;
         this.depth = depth;
-        this.position = Vec3.create(...position);
-        this.rotationY = 0;
+
+        Vec3.set(this.position, ...position);
         this.rotationX = 0;
+        this.rotationY = 0;
         this.rotationZ = 0;
         this.color = color;
-        this.modelMatrix = Mat4.create();
 
         this._buildGeometry();
-        rotate(this.modelMatrix, this.position, this.rotationY, this.rotationX, this.rotationZ);
+        this.updateModelMatrix();
     }
 
     _buildGeometry() {
@@ -239,17 +261,18 @@ class Cube extends GeometryObject {
     }
 }
 
-class ModelObject extends GeometryObject{
-    constructor(object, position, color, animateFunc) {
-        super();
+
+class ModelObject extends GeometryObject {
+    constructor(object, position = [0, 0, 0], color = [1, 1, 1, 1], animateFunc = null) {
+        super(animateFunc);
         if (object === undefined || object === null) {
-            throw Error(`Object coords are undefined: ${object}`);
+            throw new Error(`Object coords are undefined: ${object}`);
         }
-        this.position = position;
+        Vec3.set(this.position, ...position);
         this.color = color;
-        this.animateFunc = animateFunc;
 
         this._buildGeometry(object);
+        this.updateModelMatrix();
     }
 
     _buildGeometry(object) {
@@ -257,6 +280,6 @@ class ModelObject extends GeometryObject{
         this.normals = object.normals;
         this.texCoords = object.texCoords;
         this.indices = object.indices;
-        this.vertexCount = this.positions.length;
+        this.vertexCount = this.positions.length / 3;
     }
 }
