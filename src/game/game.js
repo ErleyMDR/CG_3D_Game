@@ -2,40 +2,31 @@
  * Game - Lógica Principal, Loop de Jogo e Gerenciamento de Cena
  */
 
-let gameTextures = {
-    floor: "src/assets/textures/Fabric029_1K-JPG_Color.jpg",
-    walls: "src/assets/textures/Bricks073C_1K-JPG_Color.jpg",
-    pages: "src/assets/textures/img.png"
-};
-
 class Game {
-    constructor(canvas, textures) {
+    constructor(canvas, textures, models, config = new GameConfig()) {
         this.canvas = canvas;
+        this.config = config;
 
-        this.renderer = new WebGLRenderer(this.canvas, textures);
-        this.camera = new FPSCamera(this.canvas, {
-            x: 0,
-            y: 1.7,
-            z: 8,
-            moveSpeed: 6.0
-        });
+        this.renderer = new WebGLRenderer(this.canvas, textures, models);
+        this.renderer.setAmbientLight(this.config.lighting.ambient.color);
 
-        this.player = new Player(this.camera);
+        this.camera = new FPSCamera(this.canvas, this.config.player, this.config.camera);
+        this.player = new Player(this.camera, this.config.player, this.config.lighting.flashlight);
 
-        // Matriz de projeção perspectiva (FOV = 60°, near = 0.1, far = 100)
+        // Matriz de projeção perspectiva
         this.projectionMatrix = Mat4.create();
 
         // O Mundo cuida das entidades do cenário, seus buffers e seu desenho!
-        this.world = new World(this.renderer);
+        this.world = new World(this.renderer, models, this.config.environment, this.config.objectives, this.config.monster);
 
         this.lastTime = 0;
         this._setupEvents();
     }
 
-    static async create() {
-        const canvas = document.getElementById("glcanvas1");
+    static async create(config = new GameConfig()) {
+        const canvas = document.getElementById(config.general.canvasId);
         if (!canvas) {
-            console.error("Canvas glcanvas1 não encontrado.");
+            console.error(`Canvas ${config.general.canvasId} não encontrado.`);
             return;
         }
 
@@ -43,18 +34,33 @@ class Game {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        const textures = await this._loadTextures();
+        const textures = await this._loadTextures(config.assets.textures);
+        const models = await this._loadModels(config.assets.models);
 
-        return new Game(canvas, textures);
+        return new Game(canvas, textures, models, config);
     }
 
-    static async _loadTextures() {
-        const entries = Object.entries(gameTextures);
+    static async _loadModels(modelsMap) {
+        const entries = Object.entries(modelsMap);
+
+        const loadedObjects = await Promise.all(
+            entries.map(async ([name, src]) => {
+                const obj = await ObjReader.loadOBJ(src);
+                console.info(`Par de OBJ carregado: ${[name, obj]}`)
+                return [name, obj];
+            })
+        );
+
+        return Object.fromEntries(loadedObjects);
+    }
+
+    static async _loadTextures(texturesMap = {}) {
+        const entries = Object.entries(texturesMap);
 
         const loadedTextures = await Promise.all(
             entries.map(async ([name, src]) => {
                 const image = await this._loadImage(src);
-                console.info(`Par carregado: ${[name, image]}`);
+                console.info(`Par de textura carregado: ${[name, image]}`);
                 return [name, image];
             })
         );
@@ -114,13 +120,20 @@ class Game {
         // Atualiza movimentação da câmera e jogador
         this.camera.update(deltaTime);
 
-        // Atualiza o mundo e suas animações
-        this.world.update(deltaTime);
+        // Atualiza o mundo, animações e IA do monstro
+        const aspect = this.canvas.width / this.canvas.height;
+        this.world.update(deltaTime, this.player, this.camera, aspect);
     }
 
     render() {
         const aspect = this.canvas.width / this.canvas.height;
-        Mat4.perspective(this.projectionMatrix, 60.0, aspect, 0.1, 150.0);
+        Mat4.perspective(
+            this.projectionMatrix,
+            this.config.camera.fieldOfView,
+            aspect,
+            this.config.camera.near,
+            this.config.camera.far
+        );
 
         // Inicia frame configurando câmera, projeção e luz móvel
         this.renderer.beginFrame(this.camera, this.projectionMatrix, this.player);

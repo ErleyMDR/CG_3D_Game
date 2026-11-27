@@ -104,7 +104,9 @@ class Rectangle2D extends GeometryObject {
         position = [0, 0, 0],
         color = undefined,
         texture = undefined,
-        animateFunc = null
+        animateFunc = null,
+        emissiveColor = [0.0, 0.0, 0.0],
+        emissiveIntensity = 0.0
     ) {
         super(animateFunc);
 
@@ -119,6 +121,9 @@ class Rectangle2D extends GeometryObject {
 
         this.color = color ?? [1, 1, 1, 1];
         this.texture = texture;
+
+        this.emissiveColor = emissiveColor;
+        this.emissiveIntensity = emissiveIntensity;
 
         // Material padrão do verso
         this.backColor = [0.2, 0.2, 0.2, 1.0];
@@ -263,16 +268,26 @@ class Cube extends GeometryObject {
 
 
 class ModelObject extends GeometryObject {
-    constructor(object, position = [0, 0, 0], color = [1, 1, 1, 1], animateFunc = null) {
+    constructor(object, position = [0, 0, 0], color = [1, 1, 1, 1], animateFunc = null, scale = [1, 1, 1]) {
         super(animateFunc);
         if (object === undefined || object === null) {
             throw new Error(`Object coords are undefined: ${object}`);
         }
         Vec3.set(this.position, ...position);
         this.color = color;
+        this.scale = scale;
 
         this._buildGeometry(object);
         this.updateModelMatrix();
+    }
+
+    updateModelMatrix() {
+        Mat4.identity(this.modelMatrix);
+        Mat4.translate(this.modelMatrix, this.modelMatrix, this.position);
+        if (this.rotationY) Mat4.rotateY(this.modelMatrix, this.modelMatrix, this.rotationY);
+        if (this.rotationX) Mat4.rotateX(this.modelMatrix, this.modelMatrix, this.rotationX);
+        if (this.rotationZ) Mat4.rotateZ(this.modelMatrix, this.modelMatrix, this.rotationZ);
+        if (this.scale) Mat4.scale(this.modelMatrix, this.modelMatrix, this.scale);
     }
 
     _buildGeometry(object) {

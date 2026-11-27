@@ -9,7 +9,7 @@ const skyboxColor = [0.05, 0.05, 0.07, 1.0];
 
 
 class WebGLRenderer {
-    constructor(canvas, textures) {
+    constructor(canvas, textures, models) {
         this.canvas = canvas;
         this.gl = this._initGL(canvas);
         if (!this.gl) {
@@ -19,10 +19,13 @@ class WebGLRenderer {
         this.program = null;
         this.locations = {};
         this.textures = {};
+        this.models = {};
+        this.ambientColor = [0.12, 0.12, 0.16];
 
         this._setupGL();
         this._initShaders();
         this._initTextures(textures);
+        this._initModels(models);
     }
 
     _initGL(canvas) {
@@ -49,6 +52,10 @@ class WebGLRenderer {
 
         // Cor de fundo escura de atmosfera de terror
         gl.clearColor(skyboxColor[0], skyboxColor[1], skyboxColor[2], skyboxColor[3]);
+    }
+
+    setAmbientLight(color) {
+        this.ambientColor = color;
     }
 
     _createShader(type, source) {
@@ -107,6 +114,9 @@ class WebGLRenderer {
     
         uniform vec3 uAmbientColor;
     
+        // Material e Emissão
+        uniform vec3 uEmissiveColor;
+        uniform float uEmissiveIntensity;
         uniform int uUseTexture;
         uniform sampler2D uSampler;
         uniform vec4 uColor;
@@ -125,9 +135,10 @@ class WebGLRenderer {
             }
     
             vec3 ambient = uAmbientColor * baseColor.rgb;
+            vec3 emissive = uEmissiveColor * uEmissiveIntensity;
     
             if (uLightEnabled <= 0.0) {
-                fragColor = vec4(ambient, baseColor.a);
+                fragColor = vec4(ambient + emissive, baseColor.a);
                 return;
             }
     
@@ -150,7 +161,7 @@ class WebGLRenderer {
             vec3 specular = spec * uLightColor * 0.4;
     
             vec3 finalColor =
-                ambient + (diffuse + specular) * attenuation * spotFactor;
+                ambient + (diffuse + specular) * attenuation * spotFactor + emissive;
     
             fragColor = vec4(finalColor, baseColor.a);
         }`;
@@ -201,6 +212,9 @@ class WebGLRenderer {
 
             ambientColor: gl.getUniformLocation(program, "uAmbientColor"),
 
+            emissiveColor: gl.getUniformLocation(program, "uEmissiveColor"),
+            emissiveIntensity: gl.getUniformLocation(program, "uEmissiveIntensity"),
+
             useTexture: gl.getUniformLocation(program, "uUseTexture"),
             sampler: gl.getUniformLocation(program, "uSampler"),
             color: gl.getUniformLocation(program, "uColor")
@@ -235,6 +249,9 @@ class WebGLRenderer {
         gl.deleteShader(fragmentShader);
     }
 
+    _initModels(models) {
+
+    }
 
     _initTextures(images) {
         for (const [name, image] of Object.entries(images)) {
@@ -304,6 +321,10 @@ class WebGLRenderer {
         return texture;
     }
 
+    createModelFromObj(modelObj) {
+
+    }
+
     loadTextureImage(url) {
         const gl = this.gl;
         const texture = gl.createTexture();
@@ -341,11 +362,23 @@ class WebGLRenderer {
         gl.bindBuffer(gl.ARRAY_BUFFER, texBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, geometry.texCoords, gl.STATIC_DRAW);
 
+        // Buffer de índices (opcional — usado por modelos OBJ carregados)
+        let indexBuffer = null;
+        let indexCount = 0;
+        if (geometry.indices && geometry.indices.length > 0) {
+            indexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.indices, gl.STATIC_DRAW);
+            indexCount = geometry.indices.length;
+        }
+
         return {
             pos: posBuffer,
             norm: normBuffer,
             tex: texBuffer,
-            count: geometry.vertexCount
+            count: geometry.vertexCount,
+            index: indexBuffer,
+            indexCount: indexCount
         };
     }
 
@@ -368,7 +401,7 @@ class WebGLRenderer {
         gl.uniform3fv(this.locations.uniforms.camPos, camera.position);
 
         // Uniforms da Iluminação (Luz Ambiente e Lanterna do Jogador)
-        gl.uniform3f(this.locations.uniforms.ambientColor, 0.12, 0.14, 0.18);
+        gl.uniform3fv(this.locations.uniforms.ambientColor, this.ambientColor);
 
         const fl = player.flashlight;
         gl.uniform1f(this.locations.uniforms.lightEnabled, fl.enabled ? 1.0 : 0.0);
@@ -395,6 +428,12 @@ class WebGLRenderer {
             gl.uniform4fv(this.locations.uniforms.color, col);
         }
 
+        // Configuração de material emissivo (brilho próprio)
+        const emissiveColor = options.emissiveColor || [0.0, 0.0, 0.0];
+        const emissiveIntensity = options.emissiveIntensity ?? 0.0;
+        gl.uniform3fv(this.locations.uniforms.emissiveColor, emissiveColor);
+        gl.uniform1f(this.locations.uniforms.emissiveIntensity, emissiveIntensity);
+
         // Conectar buffers aos atributos
         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.pos);
         gl.vertexAttribPointer(this.locations.attribs.position, 3, gl.FLOAT, false, 0, 0);
@@ -406,9 +445,14 @@ class WebGLRenderer {
         gl.vertexAttribPointer(this.locations.attribs.texCoord, 2, gl.FLOAT, false, 0, 0);
 
         const first = options.first ?? 0;
-        const count = options.count ?? buffers.count;
+        const count = options.count ?? (buffers.index ? buffers.indexCount : buffers.count);
 
-        gl.drawArrays(gl.TRIANGLES, first, count);
+        if (buffers.index) {
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.index);
+            gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, first * 4);
+        } else {
+            gl.drawArrays(gl.TRIANGLES, first, count);
+        }
     }
 
     _proceduralTexture() {

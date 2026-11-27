@@ -5,27 +5,29 @@
  */
 
 class FPSCamera {
-    constructor(canvas, options = {}) {
+    constructor(canvas, playerConfig = {}, cameraConfig = {}) {
         this.canvas = canvas;
 
-        // Posição no mundo (X, Y = altura dos olhos, Z)
-        this.position = Vec3.create(
-            options.x ?? 0,
-            options.y ?? 1.7,
-            options.z ?? 5
-        );
+        // Suporte tanto a (canvas, playerConfig, cameraConfig) quanto a legado (canvas, options)
+        const pos = playerConfig.initialPosition
+            ?? (('x' in playerConfig) ? [playerConfig.x, playerConfig.y, playerConfig.z] : [0, 1.7, 8]);
+        this.position = Vec3.create(...pos);
 
         this.mouseDeltaX = 0;
         this.mouseDeltaY = 0;
 
-        // Orientação em graus
-        // yaw = -90° aponta inicialmente para o eixo -Z (para dentro do cenário)
-        this.yaw = options.yaw ?? -90.0;
-        this.pitch = options.pitch ?? 0.0;
+        // Orientação em graus (yaw = -90° olha inicialmente para o eixo -Z)
+        this.yaw = cameraConfig.initialYaw ?? playerConfig.yaw ?? -90.0;
+        this.pitch = cameraConfig.initialPitch ?? playerConfig.pitch ?? 0.0;
 
         // Parâmetros de controle
-        this.moveSpeed = options.moveSpeed ?? 6.0; // unidades por segundo
-        this.mouseSensitivity = options.mouseSensitivity ?? 0.15;
+        this.moveSpeed = playerConfig.walkSpeed ?? playerConfig.moveSpeed ?? 6.0;
+        this.sprintSpeed = playerConfig.sprintSpeed ?? (this.moveSpeed * 1.5);
+        this.mouseSensitivity = cameraConfig.mouseSensitivity ?? playerConfig.mouseSensitivity ?? 0.15;
+
+        this.fieldOfView = cameraConfig.fieldOfView ?? 60.0;
+        this.near = cameraConfig.near ?? 0.1;
+        this.far = cameraConfig.far ?? 150.0;
 
         // Vetores de orientação calculados
         this.forward = Vec3.create(0, 0, -1);
@@ -141,7 +143,7 @@ class FPSCamera {
             velocity[2] /= len;
 
             const speed = this.keys['shift']
-                ? this.moveSpeed * 1.5
+                ? this.sprintSpeed
                 : this.moveSpeed;
             const dist = speed * deltaTime;
             this.position[0] += velocity[0] * dist;
