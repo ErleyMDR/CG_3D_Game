@@ -17,6 +17,7 @@ class GameConfig {
             textures: {
                 floor: "src/assets/textures/Fabric029_1K-JPG_Color.jpg",
                 walls: "src/assets/textures/Bricks073C_1K-JPG_Color.jpg",
+                statue: "src/assets/textures/Rock020_1K-JPG_Color.jpg",
                 pages: "src/assets/textures/img.png"
             },
             models: {
@@ -27,9 +28,14 @@ class GameConfig {
 
         this.player = {
             initialPosition: [0, 1.7, 8],
-            walkSpeed: 6.0,
-            sprintSpeed: 9.0, // walkSpeed * 1.5
+            walkSpeed: 4.5,
+            sprintSpeed: 7.0, // walkSpeed * 1.5
             totalSlides: 8,
+            collider: {
+                radius: 0.4,
+                height: 1.8,
+                eyeHeight: 1.7
+            },
             ...overrides.player
         };
 
@@ -81,11 +87,15 @@ class GameConfig {
             initialPosition: [0, 0, -12],
             color: [0.8, 0.8, 0.85, 1.0],
             scale: [1.0, 1.0, 1.0],
-            speed: 10.0,
-            chaseSpeed: 15.0,
-            stopDistance: 1.8,
+            speed: 8.0,
+            chaseSpeed: 12.5,
+            stopDistance: 1.5,
             detectionDistance: 35.0,
             unfreezeDelay: 0.35,
+            collider: {
+                radius: 0.5,
+                height: 2.85
+            },
             ...overrides.monster
         };
 
@@ -96,6 +106,7 @@ class GameConfig {
                     id: 1,
                     dimensions: [1.25, 1.0],
                     initialPosition: [3, 1.5, -5],
+                    triggerRadius: 0.8,
                     emissiveColor: [0.7, 0.85, 1.0],
                     emissiveIntensity: 0.3,
                     rotationSpeed: 1.2,
@@ -107,3 +118,7 @@ class GameConfig {
         };
     }
 }
+
+
+const defaultDiff = new GameConfig();
+const hardDiff = new GameConfig();

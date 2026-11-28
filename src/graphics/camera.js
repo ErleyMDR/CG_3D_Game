@@ -98,7 +98,7 @@ class FPSCamera {
         Vec3.normalize(this.up, this.up);
     }
 
-    update(deltaTime) {
+    update(deltaTime, collisionManager = null, playerCollider = null, eyeHeight = 1.7) {
         if (deltaTime <= 0) return;
 
         // Atualizar orientação
@@ -146,8 +146,23 @@ class FPSCamera {
                 ? this.sprintSpeed
                 : this.moveSpeed;
             const dist = speed * deltaTime;
-            this.position[0] += velocity[0] * dist;
-            this.position[2] += velocity[2] * dist;
+            const movement = [velocity[0] * dist, 0, velocity[2] * dist];
+
+            if (collisionManager && playerCollider) {
+                const resolved = collisionManager.resolveMovement(
+                    playerCollider,
+                    this.position,
+                    movement,
+                    true,
+                    eyeHeight
+                );
+                this.position[0] = resolved[0];
+                this.position[1] = resolved[1];
+                this.position[2] = resolved[2];
+            } else {
+                this.position[0] += movement[0];
+                this.position[2] += movement[2];
+            }
         }
 
         // Atualizar matriz de visualização lookAt

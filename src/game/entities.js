@@ -1,13 +1,26 @@
 /**
- * Entidades do Jogo: Iluminação e Jogador, Monstro (Em breve)
+ * Entidades do Jogo: Jogador, Monstro e Coletáveis (Slides/Páginas)
  */
-
 
 class Player {
     constructor(camera, playerConfig = {}, flashlightConfig = {}) {
+        this.alive = true;
         this.camera = camera;
         this.collectedCount = 0;
         this.totalSlides = playerConfig.totalSlides ?? 8;
+
+        // Configurações do colisor em cápsula
+        const colConf = playerConfig.collider ?? {};
+        this.radius = colConf.radius ?? 0.4;
+        this.height = colConf.height ?? 1.8;
+        this.eyeHeight = colConf.eyeHeight ?? 1.7;
+
+        this.collider = new CapsuleCollider(this.radius, this.height, [0, 0, 0], {
+            parentEntity: this,
+            blocksMovement: true,
+            blocksVision: false
+        });
+        this.collider.syncWithEye(this.camera.position, this.eyeHeight);
 
         // Lanterna (Fonte de luz móvel que acompanha o jogador)
         this.flashlight = {
@@ -19,6 +32,21 @@ class Player {
 
     toggleFlashlight() {
         this.flashlight.enabled = !this.flashlight.enabled;
+    }
+
+    /**
+     * Sincroniza o colisor com a posição atual da câmera
+     */
+    syncCollider() {
+        this.collider.syncWithEye(this.camera.position, this.eyeHeight);
+    }
+
+    /**
+     * Mata o jogador
+     * */
+    kill() {
+        console.log("Player foi pego e assassinado!")
+        this.alive = false;
     }
 }
 
@@ -43,19 +71,30 @@ class Monster {
         this.isObserved = false;
         this.timeSinceUnobserved = 0;
 
-        // Altura aproximada do modelo para amostragem de pontos no frustum
-        // (calculada a partir da bounding box do OBJ angel_statue_2: minY ≈ 0.01, maxY ≈ 2.87)
+        // Altura aproximada do modelo para amostragem de pontos no frustum e colisor
         this.height = 2.85;
 
-        // Sincroniza a posição do ModelObject com a posição do Monster
+        // Colisor em cápsula do monstro
+        const colConf = monsterConfig.collider ?? {};
+        this.radius = colConf.radius ?? 0.5;
+        this.collider = new CapsuleCollider(this.radius, this.height, this.position, {
+            parentEntity: this,
+            blocksMovement: true,
+            blocksVision: true
+        });
+
+        // Sincroniza a posição do ModelObject e do Collider
         this._syncModel();
     }
 
-    /** Sincroniza posição e rotação do Monster -> ModelObject, atualizando a matriz do modelo */
+    /** Sincroniza posição e rotação do Monster -> ModelObject e Collider */
     _syncModel() {
         if (this.model) {
             Vec3.set(this.model.position, this.position[0], this.position[1], this.position[2]);
             this.model.updateModelMatrix();
+        }
+        if (this.collider) {
+            this.collider.syncWithBase(this.position);
         }
     }
 
@@ -64,5 +103,43 @@ class Monster {
         const dx = targetPosition[0] - this.position[0];
         const dz = targetPosition[2] - this.position[2];
         this.model.rotationY = Math.atan2(dx, dz);
+    }
+}
+
+class Collectible {
+    /**
+     * @param {GeometryObject} geometry - Objeto visual renderizável (ex: Rectangle2D)
+     * @param {object} config - Configurações do item
+     */
+    constructor(geometry, config = {}) {
+        this.geometry = geometry;
+        this.id = config.id ?? 1;
+        this.collected = false;
+        this.soundEffect = new Audio("src/assets/sound/651515__1bob__grab-item.wav")
+
+        const triggerRadius = config.triggerRadius ?? 0.8;
+        this.collider = new SphereCollider(geometry.position, triggerRadius, {
+            isTrigger: true,
+            blocksMovement: false,
+            blocksVision: false,
+            parentEntity: this
+        });
+    }
+
+    /**
+     * Marca o item como coletado
+     */
+    collect() {
+        this.collected = true;
+        this.soundEffect.play().then(r => r);
+    }
+
+    /**
+     * Atualiza a posição do trigger se o objeto flutuar/animar
+     */
+    syncCollider() {
+        if (this.geometry && this.collider) {
+            this.collider.setPosition(this.geometry.position);
+        }
     }
 }

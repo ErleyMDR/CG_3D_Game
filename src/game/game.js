@@ -4,6 +4,8 @@
 
 class Game {
     constructor(canvas, textures, models, config = new GameConfig()) {
+        this.state = "PLAYING";
+        this.gameOverDisplayed = false;
         this.canvas = canvas;
         this.config = config;
 
@@ -98,6 +100,11 @@ class Game {
                     hudFlashlight.style.color = this.player.flashlight.enabled ? "#4caf50" : "#f44336";
                 }
             }
+
+            // Tecla R para reiniciar se estiver em Game Over
+            if (this.state === "GAME_OVER" && e.key.toLowerCase() === 'r') {
+                location.reload();
+            }
         });
     }
 
@@ -110,18 +117,41 @@ class Game {
         const deltaTime = Math.min((currentTime - this.lastTime) / 1000.0, 0.1);
         this.lastTime = currentTime;
 
-        this.update(deltaTime);
-        this.render();
+        // Se o player foi abatido, transiciona para GAME_OVER
+        if (!this.player.alive && this.state !== "GAME_OVER") {
+            this.gameOver();
+        }
+
+        if (this.state === "GAME_OVER") {
+            // Em estado de Game Over, o cenário não realiza animações, apenas renderiza como fundo
+            this.render();
+        } else {
+            this.update(deltaTime);
+            if (!this.player.alive && this.state !== "GAME_OVER") {
+                this.gameOver();
+            }
+            this.render();
+        }
 
         requestAnimationFrame((time) => this._loop(time));
     }
 
     update(deltaTime) {
-        // Atualiza movimentação da câmera e jogador
-        this.camera.update(deltaTime);
+        // Atualiza movimentação da câmera e jogador com resolução de colisão contra obstáculos
+        const collisionManager = this.world ? this.world.collisionManager : null;
+        this.camera.update(
+            deltaTime,
+            collisionManager,
+            this.player ? this.player.collider : null,
+            this.player ? this.player.eyeHeight : 1.7
+        );
+        if (this.player) {
+            this.player.syncCollider();
+        }
 
-        // Atualiza o mundo, animações e IA do monstro
+        // Atualiza o mundo, animações, IA do monstro e gatilhos de colisão
         const aspect = this.canvas.width / this.canvas.height;
+
         this.world.update(deltaTime, this.player, this.camera, aspect);
     }
 
@@ -138,7 +168,51 @@ class Game {
         // Inicia frame configurando câmera, projeção e luz móvel
         this.renderer.beginFrame(this.camera, this.projectionMatrix, this.player);
 
-        // Delega o desenho de todo o cenário para o World
+        // Renderiza o cenário como fundo
         this.world.render(this.renderer);
+
+        // Validação do estado do jogo
+        switch (this.state) {
+            case "GAME_OVER":
+                this.renderGameOver();
+                break;
+            case "PLAYING":
+            default:
+                break;
+        }
+    }
+
+    gameOver() {
+        this.state = "GAME_OVER";
+    }
+
+    renderGameOver() {
+        if (!this.gameOverDisplayed) {
+            this.gameOverDisplayed = true;
+
+            // Libera o travamento do mouse
+            if (document.exitPointerLock) {
+                document.exitPointerLock();
+            }
+
+            // Oculta HUD e retículo
+            const hud = document.getElementById("hud");
+            if (hud) hud.style.display = "none";
+            const crosshair = document.getElementById("crosshair");
+            if (crosshair) crosshair.style.display = "none";
+            const clickPrompt = document.getElementById("click-prompt");
+            if (clickPrompt) clickPrompt.style.display = "none";
+
+            // Exibe a tela de Game Over suavemente
+            const gameOverScreen = document.getElementById("game-over-screen");
+            if (gameOverScreen) {
+                gameOverScreen.classList.remove("game-over-hidden");
+                gameOverScreen.classList.add("game-over-visible");
+                gameOverScreen.style.display = "flex";
+                gameOverScreen.style.visibility = "visible";
+                void gameOverScreen.offsetWidth; // Força reflow para transição suave de opacidade
+                gameOverScreen.style.opacity = "1";
+            }
+        }
     }
 }

@@ -61,6 +61,7 @@
             line-height: 1.6;
             pointer-events: none;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 10;
         }
 
         #hud h1 {
@@ -97,11 +98,106 @@
             pointer-events: none;
             animation: pulse 2s infinite ease-in-out;
             transition: opacity 0.3s;
+            z-index: 15;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 0.6; }
             50% { opacity: 1.0; }
+        }
+
+        /* Tela de Game Over */
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 1.2s ease-in-out, visibility 1.2s ease-in-out;
+        }
+
+        #game-over-screen.game-over-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .game-over-hidden {
+            display: none !important;
+        }
+
+        /* Escurecimento suave das bordas (Vignette) */
+        .game-over-vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.1) 15%, rgba(0, 0, 0, 0.65) 60%, rgba(0, 0, 0, 0.98) 100%);
+            pointer-events: none;
+        }
+
+        .game-over-content {
+            position: relative;
+            z-index: 101;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: gameOverPulse 3s infinite ease-in-out;
+        }
+
+        .game-over-title {
+            font-size: 5rem;
+            font-weight: 900;
+            color: #d32f2f;
+            text-transform: uppercase;
+            letter-spacing: 8px;
+            margin-bottom: 16px;
+            font-family: 'Cinzel', 'Georgia', serif;
+            text-shadow: 0 0 25px rgba(255, 0, 0, 0.8), 0 0 50px rgba(180, 0, 0, 0.5), 2px 2px 10px #000;
+        }
+
+        .game-over-subtitle {
+            font-size: 1.15rem;
+            color: #aaa;
+            letter-spacing: 2px;
+            margin-bottom: 24px;
+            text-shadow: 0 0 8px #000;
+        }
+
+        .game-over-btn {
+            background: rgba(30, 10, 10, 0.85);
+            border: 2px solid #d32f2f;
+            color: #eee;
+            padding: 12px 32px;
+            font-size: 1rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 0 15px rgba(211, 47, 47, 0.4);
+        }
+
+        .game-over-btn:hover {
+            background: #d32f2f;
+            color: #fff;
+            box-shadow: 0 0 25px rgba(255, 0, 0, 0.8);
+            transform: scale(1.05);
+        }
+
+        @keyframes gameOverPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
         }
     </style>
 
@@ -109,6 +205,16 @@
     <script src="src/util/math.js"></script>
     <script src="src/util/math-utils.js"></script>
     <script src="src/config/GameConfig.js"></script>
+
+    <!-- Sistema de Física, Colisões e Raycasting -->
+    <script src="src/physics/CollisionTests.js"></script>
+    <script src="src/physics/Ray.js"></script>
+    <script src="src/physics/Collider.js"></script>
+    <script src="src/physics/AABBCollider.js"></script>
+    <script src="src/physics/SphereCollider.js"></script>
+    <script src="src/physics/CapsuleCollider.js"></script>
+    <script src="src/physics/CollisionManager.js"></script>
+
     <script src="src/graphics/animation.js"></script>
     <script src="src/graphics/camera.js"></script>
     <script src="src/game/entities.js"></script>
@@ -136,6 +242,16 @@
         </div>
 
         <div id="click-prompt">Clique na tela para travar a câmera e explorar</div>
+
+        <!-- Tela de Game Over com Vignette suave e Texto Vermelho -->
+        <div id="game-over-screen" class="game-over-hidden">
+            <div class="game-over-vignette"></div>
+            <div class="game-over-content">
+                <h1 class="game-over-title">Game Over</h1>
+                <p class="game-over-subtitle">Pressione <span class="key">R</span> para reiniciar</p>
+                <button class="game-over-btn" onclick="location.reload()">Jogar Novamente</button>
+            </div>
+        </div>
     </div>
 
     <script>

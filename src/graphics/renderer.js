@@ -20,7 +20,7 @@ class WebGLRenderer {
         this.locations = {};
         this.textures = {};
         this.models = {};
-        this.ambientColor = [0.12, 0.12, 0.16];
+        this.ambientColor = [0.12, 0.8, 0.16];
 
         this._setupGL();
         this._initShaders();
